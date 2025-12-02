@@ -37,17 +37,43 @@ beta <- rownames(beta)
 
 cat("Number of selected features:", length(beta) - 1, "\n")  # -1 for intercept
 
+# Create data frame with dummy variables for GLM
+# Convert sparse matrix to regular matrix and then to data frame
+X.dense <- as.matrix(X)
+X.df <- as.data.frame(X.dense)
+X.df$LABEL <- Y
+
 # Build GLM formula with selected features
-glm.input <- as.formula(paste("LABEL", "~ VERIFIED_PURCHASE + PRODUCT_CATEGORY + RATING +", 
-                               paste(beta[-(1:19)], collapse = "+")))
+# Remove intercept from beta names and use all selected features
+beta.features <- beta[beta != "(Intercept)"]
+glm.input <- as.formula(paste("LABEL", "~", paste(beta.features, collapse = "+")))
 
 # Train GLM model
 cat("Training GLM model...\n")
-reviews.glm <- glm(glm.input, family=binomial, reviews.train)
+reviews.glm <- glm(glm.input, family=binomial, data = X.df)
+
+# Prepare test data with same dummy variables
+cat("Preparing test data...\n")
+X.test <- sparse.model.matrix(LABEL ~ . - DOC_ID - PRODUCT_ID - PRODUCT_TITLE - REVIEW_TITLE - REVIEW_TEXT, 
+                              data = reviews.test)[,-1]
+X.test.dense <- as.matrix(X.test)
+X.test.df <- as.data.frame(X.test.dense)
+
+# Ensure test data has the same columns as training data (in the same order)
+# Exclude LABEL column when matching (LABEL is the response variable)
+train.cols <- setdiff(colnames(X.df), "LABEL")
+missing.cols <- setdiff(train.cols, colnames(X.test.df))
+if (length(missing.cols) > 0) {
+  for (col in missing.cols) {
+    X.test.df[[col]] <- 0
+  }
+}
+# Reorder columns to match training data (excluding LABEL)
+X.test.df <- X.test.df[, train.cols, drop = FALSE]
 
 # Make predictions
 cat("Making predictions...\n")
-predict.glm <- predict(reviews.glm, reviews.test, type = "response")
+predict.glm <- predict(reviews.glm, newdata = X.test.df, type = "response")
 class.glm <- rep("0", nrow(reviews.test))
 class.glm[predict.glm > .5] <- "1"
 class.glm <- factor(class.glm, levels = c("0", "1"))

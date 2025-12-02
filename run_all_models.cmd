@@ -10,11 +10,16 @@ echo Amazon Review Classifier - Batch Run
 echo ============================================
 echo.
 
+REM Change to script directory to ensure correct paths
+cd /d "%~dp0"
+
 REM Create logs directory if it doesn't exist
 if not exist "logs" mkdir logs
 
-REM Get timestamp for log files
-set timestamp=%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%%time:~6,2%
+REM Get timestamp for log files (format: YYYYMMDD_HHMMSS)
+REM Handle date format variations and remove invalid characters
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
+set timestamp=%datetime:~0,8%_%datetime:~8,6%
 set timestamp=%timestamp: =0%
 
 echo Starting batch run at %date% %time%

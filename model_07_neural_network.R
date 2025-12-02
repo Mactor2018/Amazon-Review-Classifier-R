@@ -36,13 +36,52 @@ use_backend("tensorflow")
 cat("Preparing data for neural network...\n")
 nn.data <- reviews.corpus[, -c(1,6,7,8,9)]
 
+# Check initial data types
+cat("Initial data types:\n")
+print(sapply(nn.data, class))
+
 # One-hot encode product category
+cat("One-hot encoding PRODUCT_CATEGORY...\n")
 dummy <- acm.disjonctif(nn.data['PRODUCT_CATEGORY'])
 nn.data['PRODUCT_CATEGORY'] = NULL
 nn.data <- cbind(nn.data, dummy)
 
-# Recode VERIFIED_PURCHASE
-nn.data$VERIFIED_PURCHASE <- as.numeric(nn.data$VERIFIED_PURCHASE) - 1
+# One-hot encode RATING
+cat("One-hot encoding RATING...\n")
+dummy.rating <- acm.disjonctif(nn.data['RATING'])
+nn.data['RATING'] = NULL
+nn.data <- cbind(nn.data, dummy.rating)
+
+# Verify all one-hot encoded columns are numeric
+cat("Data types after one-hot encoding:\n")
+print(sapply(nn.data, class))
+
+# Recode VERIFIED_PURCHASE (convert factor to numeric: N=0, Y=1)
+# Handle factor levels that may have been modified by make.names()
+# First convert to character, then map to numeric
+verif.char <- as.character(nn.data$VERIFIED_PURCHASE)
+# Check if levels contain "Y" or "N" (original or modified by make.names)
+# make.names() might convert "Y" to "Y" or "Y." depending on context
+verif.levels <- unique(verif.char)
+# Map to 0/1: first level = 0, second level = 1
+# Typically: "N" or "N." -> 0, "Y" or "Y." -> 1
+if (length(verif.levels) == 2) {
+  # Determine which level corresponds to "Y" (verified purchase)
+  # Check if any level contains "Y" (case-insensitive)
+  y.level <- verif.levels[grepl("^Y", verif.levels, ignore.case = TRUE) | 
+                          grepl("^Y\\.", verif.levels, ignore.case = TRUE)]
+  if (length(y.level) > 0) {
+    nn.data$VERIFIED_PURCHASE <- ifelse(verif.char == y.level[1], 1, 0)
+  } else {
+    # Fallback: use first level as 0, second as 1
+    nn.data$VERIFIED_PURCHASE <- ifelse(verif.char == verif.levels[1], 0, 1)
+  }
+} else {
+  # Fallback: use as.numeric and subtract 1
+  nn.data$VERIFIED_PURCHASE <- as.numeric(nn.data$VERIFIED_PURCHASE) - 1
+}
+# Ensure it's numeric, not factor
+nn.data$VERIFIED_PURCHASE <- as.numeric(nn.data$VERIFIED_PURCHASE)
 
 # Split data
 set.seed(245)
@@ -53,13 +92,50 @@ nn.data.train <- nn.data[train.indices, ]
 # Prepare training and test data
 cat("Converting data to numeric matrices...\n")
 nn.data.train.x <- nn.data.train[, -1]
+
+# Check data types before conversion
+cat("Checking data types before conversion...\n")
+data.types <- sapply(nn.data.train.x, class)
+factor.cols <- names(data.types)[data.types == "factor"]
+if (length(factor.cols) > 0) {
+  cat("Warning: Found factor columns:", paste(factor.cols, collapse = ", "), "\n")
+  cat("These should have been one-hot encoded. Converting to numeric.\n")
+}
+
+# All columns should already be numeric (one-hot encoded or numeric)
+# But handle any remaining factors or characters
 nn.data.train.x <- as.data.frame(lapply(nn.data.train.x, function(x) {
-  if (is.factor(x)) as.numeric(as.character(x))
-  else if (is.character(x)) as.numeric(x)
-  else as.numeric(x)
+  if (is.factor(x)) {
+    # For factors, convert to numeric properly
+    # Try to extract numeric value from factor levels if possible
+    char.x <- as.character(x)
+    num.x <- suppressWarnings(as.numeric(char.x))
+    # If conversion failed, use factor codes
+    if (any(is.na(num.x))) {
+      num.x <- as.numeric(x)
+    }
+    num.x
+  } else if (is.character(x)) {
+    # Try to convert character to numeric, replace NA with 0
+    num.x <- suppressWarnings(as.numeric(x))
+    num.x[is.na(num.x)] <- 0
+    num.x
+  } else {
+    as.numeric(x)
+  }
 }))
+
+# Convert to matrix
 nn.data.train.x <- as.matrix(nn.data.train.x)
 storage.mode(nn.data.train.x) <- "numeric"
+
+# Check for and handle NA/NaN/Inf values
+na.count <- sum(is.na(nn.data.train.x))
+inf.count <- sum(is.infinite(nn.data.train.x))
+if (na.count > 0 || inf.count > 0) {
+  cat("Warning: Found", na.count, "NA values and", inf.count, "Inf values in training data. Replacing with 0.\n")
+  nn.data.train.x[is.na(nn.data.train.x) | is.infinite(nn.data.train.x)] <- 0
+}
 
 nn.data.train.y <- as.numeric(as.character(nn.data.train[, 1]))
 nn.data.train.y <- matrix(nn.data.train.y, ncol = 1)
@@ -67,12 +143,31 @@ storage.mode(nn.data.train.y) <- "numeric"
 
 nn.data.test.x <- nn.data.test[, -1]
 nn.data.test.x <- as.data.frame(lapply(nn.data.test.x, function(x) {
-  if (is.factor(x)) as.numeric(as.character(x))
-  else if (is.character(x)) as.numeric(x)
-  else as.numeric(x)
+  if (is.factor(x)) {
+    char.x <- as.character(x)
+    num.x <- suppressWarnings(as.numeric(char.x))
+    if (any(is.na(num.x))) {
+      num.x <- as.numeric(x)
+    }
+    num.x
+  } else if (is.character(x)) {
+    num.x <- suppressWarnings(as.numeric(x))
+    num.x[is.na(num.x)] <- 0
+    num.x
+  } else {
+    as.numeric(x)
+  }
 }))
 nn.data.test.x <- as.matrix(nn.data.test.x)
 storage.mode(nn.data.test.x) <- "numeric"
+
+# Check for and handle NA/NaN/Inf values in test data
+na.count.test <- sum(is.na(nn.data.test.x))
+inf.count.test <- sum(is.infinite(nn.data.test.x))
+if (na.count.test > 0 || inf.count.test > 0) {
+  cat("Warning: Found", na.count.test, "NA values and", inf.count.test, "Inf values in test data. Replacing with 0.\n")
+  nn.data.test.x[is.na(nn.data.test.x) | is.infinite(nn.data.test.x)] <- 0
+}
 
 nn.data.test.y <- as.numeric(as.character(nn.data.test[, 1]))
 nn.data.test.y <- matrix(nn.data.test.y, ncol = 1)
@@ -96,7 +191,7 @@ nn.model <- keras_model_sequential() %>%
 
 nn.model %>% compile(
   optimizer = sgd,
-  loss = "mean_squared_error",
+  loss = "binary_crossentropy",  # Use binary_crossentropy for binary classification
   metrics = c("accuracy")
 )
 

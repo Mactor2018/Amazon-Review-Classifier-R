@@ -20,15 +20,104 @@ cat("========================================\n\n")
 # Prepare data
 cat("Preparing data for XGBoost...\n")
 boost.data <- reviews.train[,-c(1,2,6,7,8,9)]
-boost.data$PRODUCT_CATEGORY <- as.numeric(boost.data$PRODUCT_CATEGORY)
-boost.data$VERIFIED_PURCHASE <- as.numeric(boost.data$VERIFIED_PURCHASE) - 1
 
+# Convert factor variables to numeric properly
+# RATING: Convert factor to numeric (R1=1, R2=2, etc.)
+if (is.factor(boost.data$RATING)) {
+  # Extract numeric part from factor levels (e.g., "R1" -> 1)
+  boost.data$RATING <- as.numeric(gsub("R", "", as.character(boost.data$RATING)))
+} else {
+  boost.data$RATING <- as.numeric(boost.data$RATING)
+}
+
+# VERIFIED_PURCHASE: Convert factor to numeric (N=0, Y=1)
+if (is.factor(boost.data$VERIFIED_PURCHASE)) {
+  verif.levels <- levels(boost.data$VERIFIED_PURCHASE)
+  if (length(verif.levels) == 2) {
+    # Map first level to 0, second level to 1
+    boost.data$VERIFIED_PURCHASE <- ifelse(boost.data$VERIFIED_PURCHASE == verif.levels[1], 0, 1)
+  } else {
+    boost.data$VERIFIED_PURCHASE <- as.numeric(boost.data$VERIFIED_PURCHASE) - 1
+  }
+} else {
+  boost.data$VERIFIED_PURCHASE <- as.numeric(boost.data$VERIFIED_PURCHASE) - 1
+}
+
+# PRODUCT_CATEGORY: Convert factor to numeric (use factor codes)
+if (is.factor(boost.data$PRODUCT_CATEGORY)) {
+  boost.data$PRODUCT_CATEGORY <- as.numeric(boost.data$PRODUCT_CATEGORY)
+} else {
+  boost.data$PRODUCT_CATEGORY <- as.numeric(boost.data$PRODUCT_CATEGORY)
+}
+
+# Ensure all columns are numeric
+boost.data <- as.data.frame(lapply(boost.data, function(x) {
+  if (is.factor(x)) {
+    as.numeric(x)
+  } else if (is.character(x)) {
+    suppressWarnings(as.numeric(x))
+  } else {
+    as.numeric(x)
+  }
+}))
+
+# Same for test data
 boost.test <- reviews.test[,-c(1,2,6,7,8,9)]
-boost.test$VERIFIED_PURCHASE <- as.numeric(boost.test$VERIFIED_PURCHASE) - 1
-boost.test$PRODUCT_CATEGORY <- as.numeric(boost.test$PRODUCT_CATEGORY)
+
+# Convert factor variables to numeric properly
+if (is.factor(boost.test$RATING)) {
+  boost.test$RATING <- as.numeric(gsub("R", "", as.character(boost.test$RATING)))
+} else {
+  boost.test$RATING <- as.numeric(boost.test$RATING)
+}
+
+if (is.factor(boost.test$VERIFIED_PURCHASE)) {
+  verif.levels <- levels(boost.test$VERIFIED_PURCHASE)
+  if (length(verif.levels) == 2) {
+    boost.test$VERIFIED_PURCHASE <- ifelse(boost.test$VERIFIED_PURCHASE == verif.levels[1], 0, 1)
+  } else {
+    boost.test$VERIFIED_PURCHASE <- as.numeric(boost.test$VERIFIED_PURCHASE) - 1
+  }
+} else {
+  boost.test$VERIFIED_PURCHASE <- as.numeric(boost.test$VERIFIED_PURCHASE) - 1
+}
+
+if (is.factor(boost.test$PRODUCT_CATEGORY)) {
+  boost.test$PRODUCT_CATEGORY <- as.numeric(boost.test$PRODUCT_CATEGORY)
+} else {
+  boost.test$PRODUCT_CATEGORY <- as.numeric(boost.test$PRODUCT_CATEGORY)
+}
+
+# Ensure all columns are numeric
+boost.test <- as.data.frame(lapply(boost.test, function(x) {
+  if (is.factor(x)) {
+    as.numeric(x)
+  } else if (is.character(x)) {
+    suppressWarnings(as.numeric(x))
+  } else {
+    as.numeric(x)
+  }
+}))
+
+# Check for NA/NaN/Inf values and replace with 0
+if (any(is.na(boost.data)) || any(is.infinite(as.matrix(boost.data)))) {
+  cat("Warning: Found NA/Inf values in training data. Replacing with 0.\n")
+  boost.data[is.na(boost.data)] <- 0
+  boost.data[is.infinite(as.matrix(boost.data))] <- 0
+}
+
+if (any(is.na(boost.test)) || any(is.infinite(as.matrix(boost.test)))) {
+  cat("Warning: Found NA/Inf values in test data. Replacing with 0.\n")
+  boost.test[is.na(boost.test)] <- 0
+  boost.test[is.infinite(as.matrix(boost.test))] <- 0
+}
+
+# Convert to matrix and ensure numeric type
+boost.data.matrix <- as.matrix(boost.data[,-1])
+storage.mode(boost.data.matrix) <- "numeric"
 
 # Create DMatrix
-boost.train <- xgb.DMatrix(data = as.matrix(boost.data[,-1]), 
+boost.train <- xgb.DMatrix(data = boost.data.matrix, 
                           label = as.numeric(as.character(reviews.train$LABEL)))
 
 # Train XGBoost model
@@ -49,7 +138,9 @@ cat("Model training complete.\n")
 
 # Make predictions
 cat("Making predictions...\n")
-pred.boost <- predict(bstDMatrix, as.matrix(boost.test[,-1]))
+boost.test.matrix <- as.matrix(boost.test[,-1])
+storage.mode(boost.test.matrix) <- "numeric"
+pred.boost <- predict(bstDMatrix, boost.test.matrix)
 class.boost <- rep("0", nrow(boost.test))
 class.boost[pred.boost > .5] <- "1"
 class.boost <- factor(class.boost, levels = c("0", "1"))

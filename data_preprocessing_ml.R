@@ -1,6 +1,7 @@
-# Data Preprocessing Script
+# Data Preprocessing Script for Machine Learning Models
 # This script loads and preprocesses the Amazon reviews data
-# Used by all model scripts
+# Used by ML models: GLM, XGBoost, Random Forest, etc.
+# These models use sparse.model.matrix or model.matrix which handle factors automatically
 
 # Load required libraries
 library(tm)
@@ -28,7 +29,7 @@ reviews$VERIFIED_PURCHASE <- factor(
 # Fix for contrasts error in GLM/XGBoost
 levels(reviews$VERIFIED_PURCHASE) <- make.names(levels(reviews$VERIFIED_PURCHASE))
 
-# RATING: Categorical variable (1-5 stars), treated as factor
+# RATING: Categorical variable (1-5 stars), treated as factor, not ordinal
 reviews$RATING <- factor(reviews$RATING, levels = sort(unique(reviews$RATING)))
 levels(reviews$RATING) <- paste0("R", levels(reviews$RATING)) # R1, R2... for valid names
 
@@ -71,8 +72,13 @@ colnames(dtm.text.matrix) <- text.terms
 dtm.title.matrix <- as.matrix(dtm.title.cleaned)
 colnames(dtm.title.matrix) <- title.terms
 
-# Combine with original data
-reviews.corpus <- data.frame(reviews, dtm.text.matrix, dtm.title.matrix)
+# Select only required columns: LABEL, RATING, VERIFIED_PURCHASE, PRODUCT_CATEGORY
+# Keep original columns for reference (will be excluded in model formulas)
+reviews.selected <- reviews[, c("LABEL", "RATING", "VERIFIED_PURCHASE", "PRODUCT_CATEGORY", 
+                                "DOC_ID", "PRODUCT_ID", "PRODUCT_TITLE", "REVIEW_TITLE", "REVIEW_TEXT")]
+
+# Combine with text features
+reviews.corpus <- data.frame(reviews.selected, dtm.text.matrix, dtm.title.matrix)
 
 # Visualize 
 # Create figures directory if it doesn't exist
@@ -224,7 +230,6 @@ ggplot(label_verified_data, aes(x = VerifiedPurchase, y = Count, fill = Label)) 
 ggsave("figures/data_preprocessing_label_verified_purchases_grouped.png", width = 8, height = 6, dpi = 300)
 
 cat("Data visualization plots saved to figures/ directory.\n")
-
 
 # Split data
 set.seed(245)
