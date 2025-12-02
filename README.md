@@ -1,4 +1,16 @@
 # Classifying Fake Amazon Reviews
+## Modification Info
+This repository is based on [Amazon-Review-Classifier](https://github.com/sanieldalib/Amazon-Review-Classifier), which was published in 2019.
+I modified this repository to integrate it as part of my assignment.
+Below are the modifications I have made:
+1. Split the code from a single `.rmd` file into 9 separate files: one for data preprocessing and 8 for each model.
+2. Added `run_all_models` function to run all models with a single click.
+3. Reduced the dataset to 10% of the original data: `data_new.csv` instead of `amazon_reviews.csv`.
+4. Updated the code to be compatible with R 4.5. Notably, the `keras` package used for neural networks has been replaced by `keras3`. Please refer to the installation instructions for details. 
+
+*below is the original REAME*
+---
+
 ## Introduction
 With the rise of fake news and misinformation flooding the internet, it is often extremely difficult to determine what is true and what is not. Amazon, as one of the largest e-commerce sites in the world is certainly not safe from this misinformation. A common threat plaguing Amazon is the issue of fake reviews. I did not realize how widespread this was of an issue until I was shopping for a new laptop charger a few weeks back, only to discover that most of the reviews for the chargers I was looking at were not even related to the product page I was on. In this data project, I will attempt to explore the nature of these fake reviews, build several models to predict whether a review is fake or not, and finally build an interactive application where you can check the reviews of any Amazon product against my model. 
 

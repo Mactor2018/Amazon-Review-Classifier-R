@@ -3,13 +3,25 @@ title: "R Notebook"
 output: html_notebook
 ---
 ```{r}
-knitr::opts_chunk$set(fig.height=4, fig.width=6, warning = F)
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(ISLR, rattle, partykit, ggplot2, dplyr, car, tm, gbm, wordcloud, keras, glmnet, ranger, randomForest, xgboost, caret, e1071, ade4, data.table, Snowball)
 ```
 
 ```{r}
-reviews <- read.csv('amazon_reviews.csv')
+# pkgs1 <- c("ISLR", "rattle", "partykit", "ggplot2", "dplyr","car")
+# install.packages(pkgs1)
+```
+
+```{r}
+# pkgs2 <- c("tm","gbm","wordcloud","keras","glmnet",
+#           "ranger","randomForest","xgboost","caret",
+#           "e1071","ade4","data.table","Snowball")
+# install.packages(pkgs2)
+
+```
+
+```{r}
+# reviews <- read.csv('amazon_reviews.csv')
+reviews <- read.csv('data_new.csv')
 names(reviews)
 
 # coding fake as 1 and real as 0
@@ -18,23 +30,41 @@ reviews$REVIEW_TITLE <- as.character(reviews$REVIEW_TITLE)
 reviews$REVIEW_TEXT <- as.character(reviews$REVIEW_TEXT)
 reviews$VERIFIED_PURCHASE <- as.numeric(ifelse(reviews$VERIFIED_PURCHASE == 'Y', 1, 0))
 unique(reviews$PRODUCT_CATEGORY)
-str(reviews$REVIEW_TEXT)
+# head(reviews$REVIEW_TEXT, 10)
+reviews$RATING <- factor(reviews$RATING, levels = sort(unique(reviews$RATING)))
 ```
 
 ```{r}
-hist(reviews$RATING)
+head(reviews)
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+ggplot(reviews, aes(x = factor(RATING))) +  # 注意这里要用 factor
+  geom_bar(fill = "#4E79A7") +
+  scale_x_discrete(labels = c("1", "2", "3", "4", "5")) +
+  labs(title = "Rating Distribution",
+       x = "Rating",
+       y = "Count")
+
 ```
 
 ```{r}
+library(tm)
+library(magrittr)
+
 corpus <- VCorpus(VectorSource(reviews$REVIEW_TEXT)) %>% tm_map(removeWords, stopwords()) %>% tm_map(removePunctuation) %>%
-  tm_map(removeNumbers) %>% tm_map(content_transformer(tolower)) %>% tm_map(stemDocument, lazy = TRUE)
+  tm_map(removeNumbers) %>% tm_map(content_transformer(tolower)) %>% tm_map(stemDocument)
 
 dtm <- DocumentTermMatrix(corpus)
 
 dtm.cleaned <- removeSparseTerms(dtm, .9995)
-# terms <- Terms(dtm.cleaned)
+terms <- Terms(dtm.cleaned)
 # write.csv(terms, 'terms.csv')
-(terms)
+terms
 dim(dtm.cleaned)
 ```
 
@@ -60,6 +90,8 @@ barplot(table(reviews.corpus$LABEL, reviews.corpus$PRODUCT_CATEGORY), xlab="cate
 barplot(table(reviews.corpus$LABEL, reviews.corpus$RATING), xlab="rating",legend=rownames(table(reviews.corpus$LABEL)))
 ```
 ```{r}
+library(dplyr)
+
 by_fake <- group_by(reviews.corpus, LABEL)
 avg_rev_len <- summarise(by_fake, review_length = mean(nchar(REVIEW_TEXT)))
 ```
@@ -84,6 +116,10 @@ save(reviews.train, file = 'reviews.train.RData')
 
 ```{r}
 # running lasso to remove some words
+library(Matrix)
+library(glmnet)
+library(pROC)
+
 X <- sparse.model.matrix(LABEL ~ . - DOC_ID - PRODUCT_ID - PRODUCT_TITLE - REVIEW_TITLE - REVIEW_TEXT, data = reviews.train)[,-1]
 Y <- reviews.train$LABEL
 
@@ -134,12 +170,25 @@ pROC::roc(reviews.test$LABEL, predict.glm.1se, plot=T)
 ```
 
 ```{r}
+library(randomForest)
+
 dim(reviews.train)
-rf.mtry <- randomForest(LABEL ~ . - DOC_ID - PRODUCT_ID - PRODUCT_TITLE - REVIEW_TITLE - REVIEW_TEXT, reviews.train, mtry = 32, ntree = 200)
+
+# Optimized parameters for faster training with 2101 rows of data
+# Training set ~1575 rows, many features from bag-of-words (3735 columns total)
+# ntree: reduced from default 500 to 100 for faster training
+# nodesize: increased from default 1 to 5 to reduce tree depth and speed up
+# mtry: sqrt(p) ≈ sqrt(3728) ≈ 61, using 60 for speed
+rf.mtry <- randomForest(LABEL ~ . - DOC_ID - PRODUCT_ID - PRODUCT_TITLE - REVIEW_TITLE - REVIEW_TEXT, 
+                        reviews.train, 
+                        ntree = 100,           # Reduced from 500 for speed
+                        nodesize = 5,          # Increased from 1 to reduce depth
+                        mtry = 60,             # sqrt(p) ≈ 61, using 60 for speed
+                        importance = TRUE)      # Keep importance for analysis
+
 save(rf.mtry, file = 'rf.mtry.RData')
 load(file = 'rf.mtry.RData')
 plot(rf.mtry)
-#select 200 trees - choose not to iterate over params bc too many
 dim(reviews.train)
 ```
 
@@ -158,12 +207,15 @@ reviews.rf$variable.importance[order(reviews.rf$variable.importance, decreasing 
 ```
 
 ```{r}
+library(xgboost)
+library(caret)
+
 # 0.1979048 - eta = 0.05, nrounds = 342
 boost.data <- reviews.train[,-c(1,2,6,7,8,9)]
 names(boost.data)
 boost.data$PRODUCT_CATEGORY <- as.numeric(boost.data$PRODUCT_CATEGORY)
 boost.data$VERIFIED_PURCHASE <- as.numeric(boost.data$VERIFIED_PURCHASE) - 1
-boost.train <- xgb.DMatrix(data = as.matrix(boost.data[,-1]), label = as.matrix(reviews.train$LABEL))
+boost.train <- xgb.DMatrix(data = as.matrix(boost.data[,-1]), label = as.numeric(as.character(reviews.train$LABEL)))
 bstDMatrix <- xgboost(data = boost.train, eta = 0.05, nrounds = 342)
 
 # xgb.cv(data = boost.train, eta = 0.02, nrounds = 1000, nfold = 5)
@@ -172,7 +224,7 @@ boost.test <- reviews.test[,-c(1,2,6,7,8,9)]
 boost.test$VERIFIED_PURCHASE <- as.numeric(boost.test$VERIFIED_PURCHASE) - 1
 boost.test$PRODUCT_CATEGORY <- as.numeric(boost.test$PRODUCT_CATEGORY)
 
-pred.boost <- predict(bstDMatrix, newdata = as.matrix(boost.test[,-1]), type = 'class')
+pred.boost <- predict(bstDMatrix, as.matrix(boost.test[,-1]))
 class.boost <- rep("0", nrow(boost.test))
 class.boost[pred.boost > .5] ="1"
 class.boost <- as.factor(class.boost)
@@ -192,7 +244,12 @@ mean(class.only.verif != reviews.test$LABEL)
 ```
 
 ```{r}
-use_implementation("tensorflow")
+library(keras3)
+library(ade4)
+
+# Set backend (default is tensorflow, but explicitly set for clarity)
+use_backend("tensorflow")
+
 # remove unneeded features
 nn.data <- reviews.corpus[, -c(1,6,7,8,9)]
 dim(nn.data)
@@ -211,18 +268,67 @@ nn.data.test <- nn.data[-train.indices, ]
 nn.data.train <- nn.data[train.indices, ]
 
 names(nn.data.train)
-nn.data.train.y <- as.matrix(nn.data.train[, 1])
-nn.data.train.x <-as.matrix(nn.data.train[, -1])
-nn.data.test.y <- as.matrix(nn.data.test[, 1])
-nn.data.test.x <- as.matrix(nn.data.test[, -1])
 
+# Ensure all data is numeric before converting to matrix
+# Remove LABEL column (first column) for X data
+nn.data.train.x <- nn.data.train[, -1]
+
+# Convert all columns to numeric, handling factors and characters
+nn.data.train.x <- as.data.frame(lapply(nn.data.train.x, function(x) {
+  if (is.factor(x)) {
+    as.numeric(as.character(x))
+  } else if (is.character(x)) {
+    as.numeric(x)
+  } else {
+    as.numeric(x)
+  }
+}))
+
+# Check for any remaining non-numeric values
+if (any(sapply(nn.data.train.x, function(x) !is.numeric(x)))) {
+  stop("Some columns are still not numeric")
+}
+
+# Convert to matrix and ensure it's numeric
+nn.data.train.x <- as.matrix(nn.data.train.x)
+storage.mode(nn.data.train.x) <- "numeric"
+
+# Extract and convert y (LABEL)
+nn.data.train.y <- as.numeric(as.character(nn.data.train[, 1]))
+nn.data.train.y <- matrix(nn.data.train.y, ncol = 1)
+storage.mode(nn.data.train.y) <- "numeric"
+
+# Same for test data
+nn.data.test.x <- nn.data.test[, -1]
+nn.data.test.x <- as.data.frame(lapply(nn.data.test.x, function(x) {
+  if (is.factor(x)) {
+    as.numeric(as.character(x))
+  } else if (is.character(x)) {
+    as.numeric(x)
+  } else {
+    as.numeric(x)
+  }
+}))
+nn.data.test.x <- as.matrix(nn.data.test.x)
+storage.mode(nn.data.test.x) <- "numeric"
+
+nn.data.test.y <- as.numeric(as.character(nn.data.test[, 1]))
+nn.data.test.y <- matrix(nn.data.test.y, ncol = 1)
+storage.mode(nn.data.test.y) <- "numeric"
+
+# Verify data types
+cat("Training X type:", class(nn.data.train.x), "\n")
+cat("Training Y type:", class(nn.data.train.y), "\n")
+cat("Training X storage mode:", storage.mode(nn.data.train.x), "\n")
+cat("Training Y storage mode:", storage.mode(nn.data.train.y), "\n")
 dim(nn.data.train.x)
 
 # 0.8232 accuracy
-sgd = optimizer_sgd(lr = 0.1)
+sgd = optimizer_sgd(learning_rate = 0.1)
 
 nn.model <- keras_model_sequential() %>%
-  layer_dense(units = 32, activation = 'relu', input_shape = c(4216), 
+  layer_input(shape = c(4216)) %>%
+  layer_dense(units = 32, activation = 'relu', 
               kernel_regularizer = regularizer_l2(l = 0.005)) %>% 
   layer_dropout(rate = 0.3) %>% 
   layer_dense(units = 32, activation = "relu", 
@@ -250,7 +356,7 @@ nn.fit1 <- nn.model %>% fit(
 
 results <- nn.model %>% evaluate(nn.data.test.x, nn.data.test.y)
 
-nn.model %>% save_model_hdf5('fakereview.hd5')
+nn.model %>% save_model_h5('fakereview.hd5')
 ```
 
 ```{r}
@@ -260,7 +366,7 @@ plot(nn.fit1)
 
 ```{r}
 title.corpus <- VCorpus(VectorSource(reviews$REVIEW_TITLE)) %>% tm_map(removeWords, stopwords()) %>% tm_map(removePunctuation) %>%
-  tm_map(removeNumbers) %>% tm_map(content_transformer(tolower)) %>% tm_map(stemDocument, lazy = TRUE)
+  tm_map(removeNumbers) %>% tm_map(content_transformer(tolower)) %>% tm_map(stemDocument)
 
 load('title.corpus.RData')
 
@@ -274,6 +380,12 @@ dim(reviews.titles)
 ```
 
 ```{r}
+library(keras3)
+library(ade4)
+
+# Set backend (default is tensorflow, but explicitly set for clarity)
+use_backend("tensorflow")
+
 # remove unneeded features
 nn.data.titles <- reviews.titles[, -c(1,6,7,8,9)]
 nrow(reviews.titles)
@@ -292,17 +404,51 @@ nn.data.titles.test <- nn.data.titles[-train.indices, ]
 nn.data.titles.train <- nn.data.titles[train.indices, ]
 nrow(nn.data.titles.train)
 
-nn.data.titles.train.y <- as.matrix(nn.data.titles.train[, 1])
-nn.data.titles.train.x <-as.matrix(nn.data.titles.train[, -1])
-nn.data.titles.test.y <- as.matrix(nn.data.titles.test[, 1])
-nn.data.titles.test.x <- as.matrix(nn.data.titles.test[, -1])
+# Ensure all data is numeric before converting to matrix
+nn.data.titles.train.x <- nn.data.titles.train[, -1]
+
+# Convert all columns to numeric, handling factors and characters
+nn.data.titles.train.x <- as.data.frame(lapply(nn.data.titles.train.x, function(x) {
+  if (is.factor(x)) {
+    as.numeric(as.character(x))
+  } else if (is.character(x)) {
+    as.numeric(x)
+  } else {
+    as.numeric(x)
+  }
+}))
+
+nn.data.titles.train.x <- as.matrix(nn.data.titles.train.x)
+storage.mode(nn.data.titles.train.x) <- "numeric"
+
+nn.data.titles.train.y <- as.numeric(as.character(nn.data.titles.train[, 1]))
+nn.data.titles.train.y <- matrix(nn.data.titles.train.y, ncol = 1)
+storage.mode(nn.data.titles.train.y) <- "numeric"
+
+nn.data.titles.test.x <- nn.data.titles.test[, -1]
+nn.data.titles.test.x <- as.data.frame(lapply(nn.data.titles.test.x, function(x) {
+  if (is.factor(x)) {
+    as.numeric(as.character(x))
+  } else if (is.character(x)) {
+    as.numeric(x)
+  } else {
+    as.numeric(x)
+  }
+}))
+nn.data.titles.test.x <- as.matrix(nn.data.titles.test.x)
+storage.mode(nn.data.titles.test.x) <- "numeric"
+
+nn.data.titles.test.y <- as.numeric(as.character(nn.data.titles.test[, 1]))
+nn.data.titles.test.y <- matrix(nn.data.titles.test.y, ncol = 1)
+storage.mode(nn.data.titles.test.y) <- "numeric"
 
 names(nn.data)[4190]
 # 0.8109 accuracy
-sgd = optimizer_sgd(lr = 0.05)
+sgd = optimizer_sgd(learning_rate = 0.05)
 
 nn.model.titles <- keras_model_sequential() %>%
-  layer_dense(units = 32, activation = 'relu', input_shape = c(4306), 
+  layer_input(shape = c(4306)) %>%
+  layer_dense(units = 32, activation = 'relu', 
               kernel_regularizer = regularizer_l2(l = 0.01)) %>% 
   layer_dropout(rate = 0.3) %>% 
   layer_dense(units = 32, activation = "relu", 
