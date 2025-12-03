@@ -22,3 +22,5 @@ figures/
 # keras models
 *.keras
 *.model
+
+*.pdf
