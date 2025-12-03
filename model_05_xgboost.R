@@ -112,8 +112,8 @@ if (any(is.na(boost.test)) || any(is.infinite(as.matrix(boost.test)))) {
   boost.test[is.infinite(as.matrix(boost.test))] <- 0
 }
 
-# Convert to matrix and ensure numeric type
-boost.data.matrix <- as.matrix(boost.data[,-1])
+# Convert to matrix and ensure numeric type (keep all columns including RATING)
+boost.data.matrix <- as.matrix(boost.data)
 storage.mode(boost.data.matrix) <- "numeric"
 
 # Create DMatrix
@@ -138,7 +138,7 @@ cat("Model training complete.\n")
 
 # Make predictions
 cat("Making predictions...\n")
-boost.test.matrix <- as.matrix(boost.test[,-1])
+boost.test.matrix <- as.matrix(boost.test)
 storage.mode(boost.test.matrix) <- "numeric"
 pred.boost <- predict(bstDMatrix, boost.test.matrix)
 class.boost <- rep("0", nrow(boost.test))
@@ -173,7 +173,7 @@ cat("AUC:", round(as.numeric(auc(roc_result)), 4), "\n")
 
 # Feature Importance
 cat("\nTop 20 Most Important Features:\n")
-mat <- xgb.importance(feature_names = colnames(boost.data[,-1]), model = bstDMatrix)
+mat <- xgb.importance(feature_names = colnames(boost.data), model = bstDMatrix)
 print(head(mat, 20))
 
 # Visualizations

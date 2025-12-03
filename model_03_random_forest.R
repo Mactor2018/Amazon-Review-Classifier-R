@@ -19,13 +19,25 @@ cat("========================================\n\n")
 
 # Train Random Forest model
 cat("Training Random Forest model...\n")
-cat("This may take a few minutes...\n")
+cat("This may take a few minutes for large datasets...\n")
+
+# 大数据集优化参数:
+# - ntree: 50 (减少树数量，50 通常足够)
+# - nodesize: 20 (增大叶节点最小样本数，显著加速训练)
+# - mtry: 30 (减少每次分裂考虑的特征数)
+# - sampsize: 子采样大小，避免内存问题
+# - importance: TRUE (需要特征重要性)
+
+n_train <- nrow(reviews.train)
+sample_size <- min(n_train, 5000)  # 最多使用 5000 样本进行训练
+cat(sprintf("Training set: %d samples, subsample: %d\n", n_train, sample_size))
 
 rf.model <- randomForest(LABEL ~ . - DOC_ID - PRODUCT_ID - PRODUCT_TITLE - REVIEW_TITLE - REVIEW_TEXT, 
                         reviews.train, 
-                        ntree = 100,
-                        nodesize = 5,
-                        mtry = 60,
+                        ntree = 50,
+                        nodesize = 20,
+                        mtry = 30,
+                        sampsize = sample_size,
                         importance = TRUE)
 
 cat("Model training complete.\n")

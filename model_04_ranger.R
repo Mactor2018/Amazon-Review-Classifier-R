@@ -17,12 +17,24 @@ cat("\n========================================\n")
 cat("Model 4: Ranger (Fast Random Forest)\n")
 cat("========================================\n\n")
 
-# Train Ranger model
+# Train Ranger model with probability=TRUE to get proper probability predictions
 cat("Training Ranger model...\n")
+cat(sprintf("Training set size: %d samples\n", nrow(reviews.train)))
+
+# 大数据集优化参数:
+# - num.trees: 100 (减少树数量)
+# - min.node.size: 20 (增大叶节点最小样本数)
+# - sample.fraction: 0.5 (子采样比例，加速训练)
+# - num.threads: 并行线程数
+
 reviews.rf <- ranger(LABEL ~ . - DOC_ID - PRODUCT_ID - PRODUCT_TITLE - REVIEW_TITLE - REVIEW_TEXT, 
                      reviews.train, 
-                     num.trees = 200, 
-                     importance = "impurity")
+                     num.trees = 100, 
+                     min.node.size = 20,
+                     sample.fraction = 0.5,
+                     importance = "impurity",
+                     probability = TRUE,
+                     num.threads = parallel::detectCores() - 1)
 
 cat("Model training complete.\n")
 cat("Out-of-bag prediction error:", round(reviews.rf$prediction.error, 4), "\n")
@@ -30,10 +42,12 @@ cat("Out-of-bag prediction error:", round(reviews.rf$prediction.error, 4), "\n")
 # Make predictions
 cat("Making predictions...\n")
 predict.rf <- predict(reviews.rf, data = reviews.test, type = "response")
-predict.rf.prob <- predict(reviews.rf, data = reviews.test, type = "response")$predictions
 
-# Convert predictions to factor
-predict.rf.class <- factor(predict.rf$predictions, levels = c("0", "1"))
+# Extract probability for class "1" (fake review)
+predict.rf.prob <- predict.rf$predictions[, "1"]
+
+# Convert probabilities to class predictions (threshold = 0.5)
+predict.rf.class <- factor(ifelse(predict.rf.prob > 0.5, "1", "0"), levels = c("0", "1"))
 
 # Calculate performance metrics
 cat("\n----------------------------------------\n")
@@ -58,8 +72,7 @@ cat("Precision:", round(cm$byClass["Precision"], 4), "\n")
 cat("F1 Score:", round(cm$byClass["F1"], 4), "\n")
 
 # ROC Curve and AUC
-# Note: Ranger doesn't provide probability predictions directly, so we use predictions as proxy
-roc_result <- roc(reviews.test$LABEL, as.numeric(as.character(predict.rf.class)), quiet = TRUE)
+roc_result <- roc(reviews.test$LABEL, predict.rf.prob, quiet = TRUE)
 cat("AUC:", round(as.numeric(auc(roc_result)), 4), "\n")
 
 # Variable Importance
@@ -105,18 +118,18 @@ ggplot(cm_df, aes(x = Actual, y = Predicted, fill = Freq)) +
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
 ggsave("figures/model_04_confusion_matrix.png", width = 6, height = 5, dpi = 300)
 
-# 4. Prediction Probability Distribution (using predictions as proxy)
+# 4. Prediction Probability Distribution
 pred_df <- data.frame(
-  Prediction = as.numeric(as.character(predict.rf.class)),
-  Label = as.numeric(as.character(reviews.test$LABEL))
+  Probability = predict.rf.prob,
+  Label = reviews.test$LABEL
 )
-ggplot(pred_df, aes(x = Prediction, fill = factor(Label))) +
-  geom_bar(alpha = 0.7, position = "dodge") +
-  labs(title = "Prediction Distribution - Ranger",
-       x = "Predicted Class", y = "Count", fill = "Actual Label") +
+ggplot(pred_df, aes(x = Probability, fill = Label)) +
+  geom_histogram(alpha = 0.7, bins = 30, position = "identity") +
+  labs(title = "Prediction Probability Distribution - Ranger",
+       x = "Predicted Probability", y = "Frequency", fill = "Actual Label") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
-  scale_x_continuous(breaks = c(0, 1), labels = c("Real (0)", "Fake (1)"))
+  geom_vline(xintercept = 0.5, linetype = "dashed", color = "red")
 ggsave("figures/model_04_prediction_distribution.png", width = 8, height = 6, dpi = 300)
 
 cat("Visualizations saved to figures/ directory:\n")

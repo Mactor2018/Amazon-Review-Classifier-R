@@ -27,7 +27,7 @@ echo Log files will be saved to logs\ directory
 echo.
 
 REM Step 1: Data Preprocessing
-echo [1/9] Running data preprocessing...
+echo [1/8] Running data preprocessing...
 Rscript data_preprocessing.R > logs\01_data_preprocessing_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
     echo ERROR: Data preprocessing failed! Check logs\01_data_preprocessing_%timestamp%.log
@@ -38,7 +38,7 @@ echo Data preprocessing completed successfully.
 echo.
 
 REM Step 2: Model 01 - GLM Lasso Min
-echo [2/9] Running Model 01 - GLM Lasso (lambda.min)...
+echo [2/8] Running Model 01 - GLM Lasso (lambda.min)...
 Rscript model_01_glm_lasso_min.R > logs\02_model_01_glm_lasso_min_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
     echo WARNING: Model 01 failed! Check logs\02_model_01_glm_lasso_min_%timestamp%.log
@@ -48,7 +48,7 @@ if %errorlevel% neq 0 (
 echo.
 
 REM Step 3: Model 02 - GLM Lasso 1se
-echo [3/9] Running Model 02 - GLM Lasso (lambda.1se)...
+echo [3/8] Running Model 02 - GLM Lasso (lambda.1se)...
 Rscript model_02_glm_lasso_1se.R > logs\03_model_02_glm_lasso_1se_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
     echo WARNING: Model 02 failed! Check logs\03_model_02_glm_lasso_1se_%timestamp%.log
@@ -57,18 +57,19 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-REM Step 4: Model 03 - Random Forest
-echo [4/9] Running Model 03 - Random Forest...
-Rscript model_03_random_forest.R > logs\04_model_03_random_forest_%timestamp%.log 2>&1
-if %errorlevel% neq 0 (
-    echo WARNING: Model 03 failed! Check logs\04_model_03_random_forest_%timestamp%.log
-) else (
-    echo Model 03 completed successfully.
-)
+REM Step 4: Model 03 - Random Forest (SKIPPED - using Ranger instead for better performance)
+REM echo [4/9] Running Model 03 - Random Forest...
+REM Rscript model_03_random_forest.R > logs\04_model_03_random_forest_%timestamp%.log 2>&1
+REM if %errorlevel% neq 0 (
+REM     echo WARNING: Model 03 failed! Check logs\04_model_03_random_forest_%timestamp%.log
+REM ) else (
+REM     echo Model 03 completed successfully.
+REM )
+echo [4/8] Skipping Model 03 - Random Forest (using Ranger instead)
 echo.
 
-REM Step 5: Model 04 - Ranger
-echo [5/9] Running Model 04 - Ranger...
+REM Step 5: Model 04 - Ranger (Fast Random Forest)
+echo [5/8] Running Model 04 - Ranger (Fast Random Forest)...
 Rscript model_04_ranger.R > logs\05_model_04_ranger_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
     echo WARNING: Model 04 failed! Check logs\05_model_04_ranger_%timestamp%.log
@@ -78,7 +79,7 @@ if %errorlevel% neq 0 (
 echo.
 
 REM Step 6: Model 05 - XGBoost
-echo [6/9] Running Model 05 - XGBoost...
+echo [6/8] Running Model 05 - XGBoost...
 Rscript model_05_xgboost.R > logs\06_model_05_xgboost_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
     echo WARNING: Model 05 failed! Check logs\06_model_05_xgboost_%timestamp%.log
@@ -88,7 +89,7 @@ if %errorlevel% neq 0 (
 echo.
 
 REM Step 7: Model 06 - Simple GLM
-echo [7/9] Running Model 06 - Simple GLM...
+echo [7/8] Running Model 06 - Simple GLM...
 Rscript model_06_simple_glm.R > logs\07_model_06_simple_glm_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
     echo WARNING: Model 06 failed! Check logs\07_model_06_simple_glm_%timestamp%.log
@@ -98,7 +99,7 @@ if %errorlevel% neq 0 (
 echo.
 
 REM Step 8: Model 07 - Neural Network (REVIEW_TEXT only)
-echo [8/9] Running Model 07 - Neural Network (REVIEW_TEXT only)...
+echo [8/8] Running Model 07 - Neural Network (REVIEW_TEXT only)...
 echo This may take several minutes...
 Rscript model_07_neural_network.R > logs\08_model_07_neural_network_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
@@ -109,8 +110,8 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-REM Step 9: Model 08 - Neural Network (REVIEW_TEXT + REVIEW_TITLE)
-echo [9/9] Running Model 08 - Neural Network (REVIEW_TEXT + REVIEW_TITLE)...
+REM Step 9: Model 08 - Neural Network (REVIEW_TEXT + REVIEW_TITLE) - BONUS
+echo [BONUS] Running Model 08 - Neural Network (REVIEW_TEXT + REVIEW_TITLE)...
 echo This may take several minutes...
 Rscript model_08_neural_network_titles.R > logs\09_model_08_neural_network_titles_%timestamp%.log 2>&1
 if %errorlevel% neq 0 (
@@ -128,14 +129,14 @@ echo ============================================
 echo.
 echo All outputs have been saved to logs\ directory:
 echo   - Data preprocessing: logs\01_data_preprocessing_%timestamp%.log
-echo   - Model 01: logs\02_model_01_glm_lasso_min_%timestamp%.log
-echo   - Model 02: logs\03_model_02_glm_lasso_1se_%timestamp%.log
-echo   - Model 03: logs\04_model_03_random_forest_%timestamp%.log
-echo   - Model 04: logs\05_model_04_ranger_%timestamp%.log
-echo   - Model 05: logs\06_model_05_xgboost_%timestamp%.log
-echo   - Model 06: logs\07_model_06_simple_glm_%timestamp%.log
-echo   - Model 07: logs\08_model_07_neural_network_%timestamp%.log
-echo   - Model 08: logs\09_model_08_neural_network_titles_%timestamp%.log
+echo   - Model 01 (GLM Lasso min): logs\02_model_01_glm_lasso_min_%timestamp%.log
+echo   - Model 02 (GLM Lasso 1se): logs\03_model_02_glm_lasso_1se_%timestamp%.log
+echo   - Model 03 (Random Forest): SKIPPED - using Ranger instead
+echo   - Model 04 (Ranger): logs\05_model_04_ranger_%timestamp%.log
+echo   - Model 05 (XGBoost): logs\06_model_05_xgboost_%timestamp%.log
+echo   - Model 06 (Simple GLM): logs\07_model_06_simple_glm_%timestamp%.log
+echo   - Model 07 (Neural Network): logs\08_model_07_neural_network_%timestamp%.log
+echo   - Model 08 (NN + Titles): logs\09_model_08_neural_network_titles_%timestamp%.log
 echo.
 echo All visualizations have been saved to figures\ directory.
 echo.

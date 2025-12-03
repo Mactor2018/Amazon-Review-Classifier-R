@@ -103,9 +103,9 @@ if (length(verif.levels) == 2) {
 # Ensure it's numeric, not factor
 nn.data.titles$VERIFIED_PURCHASE <- as.numeric(nn.data.titles$VERIFIED_PURCHASE)
 
-# Split data
-set.seed(245)
-train.indices <- sample(nrow(nn.data.titles), 0.75*nrow(nn.data.titles))
+# Use the same train/test split as defined in data_preprocessing.R
+# This ensures all models use the same split for fair comparison
+train.indices <- which(rownames(reviews.corpus) %in% rownames(reviews.train))
 nn.data.titles.test <- nn.data.titles[-train.indices, ]
 nn.data.titles.train <- nn.data.titles[train.indices, ]
 

@@ -8,10 +8,12 @@ library(tm)
 library(magrittr)
 library(SnowballC)  # Required for stemDocument function
 library(ggplot2)
+library(data.table)
 
-# Load data
+# Load data using data.table for robust CSV parsing
 cat("Loading data...\n")
-reviews <- read.csv('data_new.csv')
+reviews <- data.table::fread('data_new.csv', encoding = "UTF-8", quote = "\"")
+reviews <- as.data.frame(reviews)
 
 # Data preprocessing
 cat("Preprocessing data...\n")
@@ -40,10 +42,11 @@ levels(reviews$PRODUCT_CATEGORY) <- make.names(levels(reviews$PRODUCT_CATEGORY))
 # Create corpus and document-term matrix for REVIEW_TEXT
 cat("Creating document-term matrix for REVIEW_TEXT...\n")
 corpus.text <- VCorpus(VectorSource(reviews$REVIEW_TEXT)) %>% 
-  tm_map(removeWords, stopwords()) %>% 
+  tm_map(content_transformer(tolower)) %>%
   tm_map(removePunctuation) %>%
-  tm_map(removeNumbers) %>% 
-  tm_map(content_transformer(tolower)) %>% 
+  tm_map(removeNumbers) %>%
+  tm_map(stripWhitespace) %>%
+  tm_map(removeWords, stopwords()) %>% 
   tm_map(stemDocument)
 
 dtm.text <- DocumentTermMatrix(corpus.text)
@@ -52,10 +55,11 @@ dtm.text.cleaned <- removeSparseTerms(dtm.text, .9995)
 # Create corpus and document-term matrix for REVIEW_TITLE
 cat("Creating document-term matrix for REVIEW_TITLE...\n")
 corpus.title <- VCorpus(VectorSource(reviews$REVIEW_TITLE)) %>% 
-  tm_map(removeWords, stopwords()) %>% 
+  tm_map(content_transformer(tolower)) %>%
   tm_map(removePunctuation) %>%
-  tm_map(removeNumbers) %>% 
-  tm_map(content_transformer(tolower)) %>% 
+  tm_map(removeNumbers) %>%
+  tm_map(stripWhitespace) %>%
+  tm_map(removeWords, stopwords()) %>% 
   tm_map(stemDocument)
 
 dtm.title <- DocumentTermMatrix(corpus.title)
