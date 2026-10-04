@@ -19,7 +19,11 @@ cat("========================================\n\n")
 
 # Prepare data
 cat("Preparing data for XGBoost...\n")
-boost.data <- reviews.train[,-c(1,2,6,7,8,9)]
+# Select features by name (not position): metadata + TEXT_*/TITLE_* term counts
+boost.cols <- c("RATING", "VERIFIED_PURCHASE", "PRODUCT_CATEGORY",
+                grep("^(TEXT|TITLE)_", colnames(reviews.train), value = TRUE))
+# Note: PRODUCT_CATEGORY enters as integer factor codes (trees can split on them)
+boost.data <- reviews.train[, boost.cols]
 
 # Convert factor variables to numeric properly
 # RATING: Convert factor to numeric (R1=1, R2=2, etc.)
@@ -62,7 +66,7 @@ boost.data <- as.data.frame(lapply(boost.data, function(x) {
 }))
 
 # Same for test data
-boost.test <- reviews.test[,-c(1,2,6,7,8,9)]
+boost.test <- reviews.test[, boost.cols]
 
 # Convert factor variables to numeric properly
 if (is.factor(boost.test$RATING)) {

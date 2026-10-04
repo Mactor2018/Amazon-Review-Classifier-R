@@ -34,7 +34,9 @@ use_backend("tensorflow")
 
 # Prepare neural network data
 cat("Preparing data for neural network...\n")
-nn.data <- reviews.corpus[, -c(1,6,7,8,9)]
+# Text-only model: drop identifiers/raw text AND all TITLE_* features; LABEL stays first
+nn.drop <- c(c("DOC_ID", "PRODUCT_ID", "PRODUCT_TITLE", "REVIEW_TITLE", "REVIEW_TEXT"), grep("^TITLE_", colnames(reviews.corpus), value = TRUE))
+nn.data <- reviews.corpus[, c("LABEL", setdiff(colnames(reviews.corpus), c("LABEL", nn.drop)))]
 
 # Check initial data types
 cat("Initial data types:\n")
@@ -215,9 +217,7 @@ cat("\nEvaluating on test set...\n")
 results <- nn.model %>% evaluate(nn.data.test.x, nn.data.test.y, verbose = 0)
 
 # Get test labels (need to match the split indices)
-set.seed(245)
-train.indices <- sample(nrow(nn.data), 0.75*nrow(nn.data))
-test_labels <- reviews.corpus[-train.indices, ]$LABEL
+test_labels <- reviews.test$LABEL
 test_labels <- as.numeric(as.character(test_labels))
 
 # Make predictions

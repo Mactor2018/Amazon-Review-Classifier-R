@@ -11,10 +11,14 @@ library(data.table)
 
 # Load data using data.table for robust CSV parsing
 cat("Loading data...\n")
-reviews <- data.table::fread('data_new.csv', encoding = "UTF-8", quote = "\"")
+# Dataset can be overridden, e.g. REVIEWS_CSV=data_small.csv Rscript data_preprocessing.R
+data.file <- Sys.getenv("REVIEWS_CSV", unset = "data_new.csv")
+cat("Dataset:", data.file, "\n")
+reviews <- data.table::fread(data.file, encoding = "UTF-8", quote = "\"")
 reviews <- as.data.frame(reviews)
 
 # Data preprocessing
+# LABEL encoding: 1 = FAKE (__label1__), 0 = REAL (__label2__)
 cat("Preprocessing data...\n")
 reviews$LABEL <- as.factor(ifelse(reviews$LABEL == '__label1__', 1, 0))
 reviews$REVIEW_TITLE <- as.character(reviews$REVIEW_TITLE)
@@ -97,7 +101,7 @@ ggplot(reviews.corpus, aes(x = LABEL, fill = LABEL)) +
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
         axis.text = element_text(size = 11),
         axis.title = element_text(size = 12)) +
-  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5, size = 4)
+  geom_text(stat = 'count', aes(label = after_stat(count)), vjust = -0.5, size = 4)
 ggsave("figures/data_preprocessing_label_distribution.png", width = 8, height = 6, dpi = 300)
 
 # b. RATING distribution
@@ -110,17 +114,16 @@ ggplot(reviews.corpus, aes(x = RATING, fill = RATING)) +
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
         axis.text = element_text(size = 11),
         axis.title = element_text(size = 12)) +
-  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5, size = 4)
+  geom_text(stat = 'count', aes(label = after_stat(count)), vjust = -0.5, size = 4)
 ggsave("figures/data_preprocessing_rating_distribution.png", width = 8, height = 6, dpi = 300)
 
 # c. VERIFIED_PURCHASE distribution
-# Create a display version of VERIFIED_PURCHASE for visualization
-verif_levels <- levels(reviews.corpus$VERIFIED_PURCHASE)
-verif_labels <- ifelse(grepl("^Y$|^Y\\.", verif_levels), "Yes", "No")
-reviews.corpus$VERIFIED_PURCHASE_FACTOR <- factor(reviews.corpus$VERIFIED_PURCHASE, 
-                                                    levels = verif_levels,
-                                                    labels = verif_labels)
-ggplot(reviews.corpus, aes(x = VERIFIED_PURCHASE_FACTOR, fill = VERIFIED_PURCHASE_FACTOR)) +
+# (display factor lives in a plot-only data frame so it never becomes a model feature)
+verified.plot.data <- data.frame(
+  VERIFIED_PURCHASE_FACTOR = factor(reviews.corpus$VERIFIED_PURCHASE,
+                                    levels = c("N", "Y"), labels = c("No", "Yes"))
+)
+ggplot(verified.plot.data, aes(x = VERIFIED_PURCHASE_FACTOR, fill = VERIFIED_PURCHASE_FACTOR)) +
   geom_bar(alpha = 0.8) +
   scale_fill_manual(values = c("No" = "#95A5A6", "Yes" = "#27AE60"), guide = "none") +
   labs(title = "Distribution of Verified Purchases",
@@ -129,14 +132,14 @@ ggplot(reviews.corpus, aes(x = VERIFIED_PURCHASE_FACTOR, fill = VERIFIED_PURCHAS
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
         axis.text = element_text(size = 11),
         axis.title = element_text(size = 12)) +
-  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5, size = 4)
+  geom_text(stat = 'count', aes(label = after_stat(count)), vjust = -0.5, size = 4)
 ggsave("figures/data_preprocessing_verified_purchases_distribution.png", width = 8, height = 6, dpi = 300)
 
 # 2. Relationship visualizations using appropriate chart types
 # a. LABEL vs RATING: Stacked bar chart showing proportions
 label_rating_data <- as.data.frame(table(reviews.corpus$LABEL, reviews.corpus$RATING))
 names(label_rating_data) <- c("Label", "Rating", "Count")
-label_rating_data$Label <- factor(label_rating_data$Label, levels = c("0", "1"), labels = c("Fake (0)", "Real (1)"))
+label_rating_data$Label <- factor(label_rating_data$Label, levels = c("0", "1"), labels = c("Real (0)", "Fake (1)"))
 
 # Calculate percentages for each label
 label_totals <- aggregate(Count ~ Label, label_rating_data, sum)
@@ -147,7 +150,7 @@ label_rating_data$Percentage <- apply(label_rating_data, 1, function(x) {
 
 ggplot(label_rating_data, aes(x = Rating, y = Count, fill = Label)) +
   geom_bar(stat = "identity", position = "stack", alpha = 0.8) +
-  scale_fill_manual(values = c("Fake (0)" = "#E74C3C", "Real (1)" = "#3498DB"),
+  scale_fill_manual(values = c("Real (0)" = "#3498DB", "Fake (1)" = "#E74C3C"),
                     name = "Label") +
   labs(title = "Label Distribution by Rating",
        x = "Rating", y = "Count",
@@ -165,7 +168,7 @@ ggsave("figures/data_preprocessing_label_rating_correlation.png", width = 10, he
 # b. LABEL vs RATING: Grouped bar chart for better comparison
 ggplot(label_rating_data, aes(x = Rating, y = Count, fill = Label)) +
   geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
-  scale_fill_manual(values = c("Fake (0)" = "#E74C3C", "Real (1)" = "#3498DB"),
+  scale_fill_manual(values = c("Real (0)" = "#3498DB", "Fake (1)" = "#E74C3C"),
                     name = "Label") +
   labs(title = "Label Count by Rating",
        x = "Rating", y = "Count",
@@ -181,9 +184,9 @@ ggplot(label_rating_data, aes(x = Rating, y = Count, fill = Label)) +
 ggsave("figures/data_preprocessing_label_rating_grouped.png", width = 10, height = 6, dpi = 300)
 
 # c. LABEL vs VERIFIED_PURCHASE: Stacked bar chart
-label_verified_data <- as.data.frame(table(reviews.corpus$LABEL, reviews.corpus$VERIFIED_PURCHASE_FACTOR))
+label_verified_data <- as.data.frame(table(reviews.corpus$LABEL, verified.plot.data$VERIFIED_PURCHASE_FACTOR))
 names(label_verified_data) <- c("Label", "VerifiedPurchase", "Count")
-label_verified_data$Label <- factor(label_verified_data$Label, levels = c("0", "1"), labels = c("Fake (0)", "Real (1)"))
+label_verified_data$Label <- factor(label_verified_data$Label, levels = c("0", "1"), labels = c("Real (0)", "Fake (1)"))
 
 # Calculate percentages
 verified_totals <- aggregate(Count ~ Label, label_verified_data, sum)
@@ -194,7 +197,7 @@ label_verified_data$Percentage <- apply(label_verified_data, 1, function(x) {
 
 ggplot(label_verified_data, aes(x = VerifiedPurchase, y = Count, fill = Label)) +
   geom_bar(stat = "identity", position = "stack", alpha = 0.8) +
-  scale_fill_manual(values = c("Fake (0)" = "#E74C3C", "Real (1)" = "#3498DB"),
+  scale_fill_manual(values = c("Real (0)" = "#3498DB", "Fake (1)" = "#E74C3C"),
                     name = "Label") +
   labs(title = "Label Distribution by Verified Purchase Status",
        x = "Verified Purchase", y = "Count",
@@ -212,7 +215,7 @@ ggsave("figures/data_preprocessing_label_verified_purchases_correlation.png", wi
 # d. LABEL vs VERIFIED_PURCHASE: Grouped bar chart
 ggplot(label_verified_data, aes(x = VerifiedPurchase, y = Count, fill = Label)) +
   geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
-  scale_fill_manual(values = c("Fake (0)" = "#E74C3C", "Real (1)" = "#3498DB"),
+  scale_fill_manual(values = c("Real (0)" = "#3498DB", "Fake (1)" = "#E74C3C"),
                     name = "Label") +
   labs(title = "Label Count by Verified Purchase Status",
        x = "Verified Purchase", y = "Count",

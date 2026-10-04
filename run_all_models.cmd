@@ -18,9 +18,7 @@ if not exist "logs" mkdir logs
 
 REM Get timestamp for log files (format: YYYYMMDD_HHMMSS)
 REM Handle date format variations and remove invalid characters
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
-set timestamp=%datetime:~0,8%_%datetime:~8,6%
-set timestamp=%timestamp: =0%
+for /f %%I in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set timestamp=%%I
 
 echo Starting batch run at %date% %time%
 echo Log files will be saved to logs\ directory

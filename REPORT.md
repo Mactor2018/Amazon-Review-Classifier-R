@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This report presents a comprehensive comparison of eight different machine learning models for classifying Amazon product reviews as fake or real. The models were trained on a dataset of 2,101 reviews (10% sample) and evaluated on a test set of 525 reviews. The best performing model achieved an accuracy of 78.29% with an AUC of 0.8274.
+This report presents a comprehensive comparison of eight different machine learning models for classifying Amazon product reviews as fake or real. The models were trained on a dataset of 2,100 reviews (10% sample) and evaluated on a test set of 525 reviews. The best performing model by accuracy was Ranger (78.29%, AUC 0.7848); XGBoost had the best AUC (0.8274). Differences between models are within the noise expected from a single 525-review test split (about ±3.5 points).
 
 ---
 
@@ -10,8 +10,8 @@ This report presents a comprehensive comparison of eight different machine learn
 
 ### 1.1 Data Description
 - **Source**: Amazon product reviews dataset
-- **Sample Size**: 2,101 reviews (10% uniform sample from original dataset)
-- **Target Variable**: `LABEL` (Binary: 0 = Fake, 1 = Real)
+- **Sample Size**: 2,100 reviews (10% uniform sample of the 21,000-review original, `data_small.csv`). **These results were produced on this sample and have not been regenerated on the full `data_new.csv`; to reproduce, run with `REVIEWS_CSV=data_small.csv`.**
+- **Target Variable**: `LABEL` (Binary: 1 = Fake (`__label1__`), 0 = Real (`__label2__`)). **Note:** the confusion-matrix metrics in this report (sensitivity, specificity, precision) were computed by `caret` with its default positive class, "0" (Real), so they describe the Real class, not Fake.
 - **Features**: 
   - Review text (processed into bag-of-words)
   - Review title (for some models)
@@ -298,13 +298,13 @@ This section explains how each model type processes and utilizes the text featur
 2. **Linear Combination**:
    - Each selected text feature gets a coefficient (weight)
    - Prediction = weighted sum of feature values: `β₀ + β₁×word₁ + β₂×word₂ + ...`
-   - Positive coefficients indicate words associated with real reviews
-   - Negative coefficients indicate words associated with fake reviews
+   - Positive coefficients indicate words associated with fake reviews (LABEL = 1)
+   - Negative coefficients indicate words associated with real reviews
 
 3. **Interpretability**:
    - Coefficients directly show which words are most predictive
    - Can identify words that strongly indicate fake vs. real reviews
-   - Example: If "great" has coefficient +0.5, reviews containing "great" are more likely to be real
+   - Example: If "great" has coefficient +0.5, reviews containing "great" are more likely to be fake
 
 **Advantages**: 
 - Automatic feature selection reduces overfitting
@@ -339,7 +339,7 @@ This section explains how each model type processes and utilizes the text featur
    - Feature importance measures how much each word contributes across all trees
 
 4. **Non-Linear Relationships**:
-   - Can capture interactions: "If contains 'great' AND contains 'qualiti' THEN likely real"
+   - Can capture interactions: "If contains 'great' AND contains 'qualiti' THEN likely fake"
    - Different thresholds for word counts can be learned
    - Can handle complex decision boundaries
 
@@ -450,10 +450,9 @@ This section explains how each model type processes and utilizes the text featur
    - Prevents the model from memorizing specific word combinations
 
 5. **Text + Title Integration** (Model 8):
-   - Processes both review text DTM and title DTM separately
-   - Title features are added as additional input features (prefixed with "title_")
+   - Processes both review text DTM and title DTM
+   - Title features are added as additional input features (prefixed with "TITLE_"; Model 7 excludes them)
    - The network learns to combine information from both sources
-   - Title features use stricter sparsity (0.995 vs 0.9995), resulting in fewer but more common words
 
 **Advantages**:
 - Can learn very complex, non-linear relationships
@@ -475,7 +474,7 @@ Hidden Layer 1 (32 neurons): Learns word combinations
   ↓ (with dropout 30%)
 Hidden Layer 2 (32 neurons): Learns higher-level patterns
   ↓ (with dropout 30%)
-Output (1 neuron): Probability of being real review
+Output (1 neuron): Probability of being a fake review
 ```
 
 ---
@@ -572,7 +571,7 @@ Across all models, the following features consistently appear as most important:
 
 ### 5.2 Limitations
 
-1. **Dataset Size**: The 10% sample (2,101 reviews) may limit model generalization
+1. **Dataset Size**: The 10% sample (2,100 reviews) may limit model generalization
 2. **Class Imbalance**: Potential imbalance between fake and real reviews may affect model performance
 3. **Feature Engineering**: Current bag-of-words approach may miss semantic relationships
 4. **Temporal Aspects**: No temporal features considered (review date, product launch date)
@@ -663,7 +662,7 @@ All visualizations are saved in the `figures/` directory with descriptive filena
 ---
 
 **Report Generated**: January 12, 2025  
-**Dataset**: Amazon Reviews (10% sample, 2,101 reviews)  
+**Dataset**: Amazon Reviews (10% sample, 2,100 reviews)  
 **Models Evaluated**: 8  
 **Best Model**: Ranger (Accuracy: 78.29%, AUC: 0.7848)
 

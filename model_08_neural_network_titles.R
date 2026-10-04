@@ -32,29 +32,16 @@ cat("\n========================================\n")
 cat("Model 8: Neural Network (REVIEW_TEXT + REVIEW_TITLE)\n")
 cat("========================================\n\n")
 
-# Create title corpus
-cat("Processing review titles...\n")
-title.corpus <- VCorpus(VectorSource(reviews$REVIEW_TITLE)) %>% 
-  tm_map(removeWords, stopwords()) %>% 
-  tm_map(removePunctuation) %>%
-  tm_map(removeNumbers) %>% 
-  tm_map(content_transformer(tolower)) %>% 
-  tm_map(stemDocument)
-
-dtm.title <- DocumentTermMatrix(title.corpus)
-dtm.title.sparse <- removeSparseTerms(dtm.title, .995)
-
-colnames(dtm.title.sparse) <- paste('title', colnames(dtm.title.sparse), sep = '_')
-reviews.titles <- data.frame(reviews.corpus, as.matrix(dtm.title.sparse))
-
-cat("Title features added. Total features:", ncol(reviews.titles), "\n")
+# Title features (TITLE_*) are already part of reviews.corpus (see data_preprocessing.R)
+reviews.titles <- reviews.corpus
 
 # Set backend
 use_backend("tensorflow")
 
 # Prepare neural network data
 cat("Preparing data for neural network...\n")
-nn.data.titles <- reviews.titles[, -c(1,6,7,8,9)]
+nn.drop <- c("DOC_ID", "PRODUCT_ID", "PRODUCT_TITLE", "REVIEW_TITLE", "REVIEW_TEXT")
+nn.data.titles <- reviews.titles[, c("LABEL", setdiff(colnames(reviews.titles), c("LABEL", nn.drop)))]
 
 # Check initial data types
 cat("Initial data types:\n")
@@ -252,9 +239,7 @@ cat("Test Loss:", round(results$loss, 4), "\n")
 cat("Test Accuracy:", round(results$accuracy, 4), "\n")
 
 # Get test labels (need to match the split indices)
-set.seed(245)
-train.indices <- sample(nrow(nn.data.titles), 0.75*nrow(nn.data.titles))
-test_labels <- reviews.titles[-train.indices, ]$LABEL
+test_labels <- reviews.test$LABEL
 test_labels <- as.numeric(as.character(test_labels))
 
 # Accuracy from predictions

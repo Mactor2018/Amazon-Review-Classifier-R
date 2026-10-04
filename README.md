@@ -3,9 +3,10 @@
 This repository is based on [Amazon-Review-Classifier](https://github.com/sanieldalib/Amazon-Review-Classifier), which was published in 2019.
 I modified this repository to integrate it as part of my assignment.
 Below are the modifications I have made:
-1. Split the code from a single `.rmd` file into 9 separate files: one for data preprocessing and 8 for each model.
+1. Split the code from a single `.rmd` file into separate files: `data_preprocessing.R` and 8 model scripts (`model_01`–`model_08`).
 2. Added `run_all_models` function to run all models with a single click.
-3. Reduced the dataset to 10% of the original data: `data_new.csv` instead of `amazon_reviews.csv`.
+3. `data_new.csv` is a shuffled copy of the full 21,000-review dataset; `data_small.csv` is a 10% sample (2,100 reviews, made by `sample_data.py`). Preprocessing reads `data_new.csv` by default; set `REVIEWS_CSV=data_small.csv` to use the sample (the numbers in `REPORT.md` come from the sample).
+   Label encoding: `LABEL = 1` is fake, `0` is real.
 4. Updated the code to be compatible with R 4.5. Notably, the `keras` package used for neural networks has been replaced by `keras3`. Please refer to the installation instructions for details. 
 
 *below is the original REAME*
